@@ -1,0 +1,35 @@
+# Clojure
+.cpcache/
+.nrepl-port
+*.jar
+*.class
+
+# ClojureScript / Shadow-cljs
+.shadow-cljs/
+resources/public/js/
+node_modules/
+package-lock.json
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.calva/
+.clj-kondo/.cache/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.swp
+*~
+
+# Build artifacts
+target/
+out/
+

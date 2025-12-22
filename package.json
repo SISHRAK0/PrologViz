@@ -1,0 +1,19 @@
+{
+  "name": "logicflow",
+  "version": "1.0.0",
+  "description": "Prolog-like DSL with Web Visualizer",
+  "private": true,
+  "scripts": {
+    "dev": "shadow-cljs watch app",
+    "build": "shadow-cljs release app",
+    "clean": "rm -rf resources/public/js"
+  },
+  "dependencies": {
+    "react": "18.2.0",
+    "react-dom": "18.2.0"
+  },
+  "devDependencies": {
+    "shadow-cljs": "2.26.6"
+  }
+}
+
