@@ -8,7 +8,6 @@
 .shadow-cljs/
 resources/public/js/
 node_modules/
-package-lock.json
 
 # IDE
 .idea/
