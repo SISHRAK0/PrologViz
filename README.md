@@ -1,434 +1,367 @@
-# ⚡ LogicFlow
+# Лабораторная работа №4
 
-A **Prolog-like Domain Specific Language** implemented in Clojure, leveraging **Software Transactional Memory (STM)** for concurrent knowledge base management, with a beautiful **real-time web visualizer**.
+---
 
-![Clojure](https://img.shields.io/badge/Clojure-1.11+-5881D8?style=flat&logo=clojure&logoColor=white)
-![ClojureScript](https://img.shields.io/badge/ClojureScript-1.11+-5881D8?style=flat&logo=clojure&logoColor=white)
-![License](https://img.shields.io/badge/License-MIT-green.svg)
+**Выполнили:** Барашко Арсений и Пасечник Иван  
 
-## ✨ Features
+**Группа:** Р3331  
 
-- 🧠 **Prolog-like DSL** - Define facts, rules, and queries using familiar logic programming syntax
-- 🔄 **Unification Algorithm** - Pattern matching with logic variables
-- 🔙 **Backtracking Search** - Lazy evaluation for efficient query resolution
-- 🔒 **STM-based Knowledge Base** - Thread-safe concurrent access using Clojure's refs
-- 🌐 **Real-time Web UI** - Beautiful visualizer with WebSocket updates
-- 💻 **Browser REPL** - Execute Prolog queries directly in the browser
-- 🌳 **Inference Tracing** - Visualize the inference tree step by step
-- 📊 **Transaction History** - Track all knowledge base modifications
-- 🔌 **REST API** - Full HTTP API for external integrations
-- 📦 **Tabling/Memoization** - Prevent infinite recursion, improve performance
-- 💾 **Persistence** - Save/load knowledge bases to EDN, JSON, or Prolog format
+**Преподаватель:** Пенской Александр Владимирович  
 
-## 🚀 Quick Start
+**Язык:** Clojure / ClojureScript
 
-### Prerequisites
+---
 
-- Java 17+ (Java 21 recommended)
-- [Clojure CLI tools](https://clojure.org/guides/getting_started)
-- Node.js 16+ (for ClojureScript frontend)
+## Цель
 
-### Installation
+Получить навыки работы с метапрограммированием, макросами, DSL и реализацией интерпретаторов.
 
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/logicflow.git
-cd logicflow
+---
 
-# Make build script executable
-chmod +x build.sh
+## Задание
 
-# Check dependencies
-./build.sh check
+Реализовать DSL для логического программирования в стиле Prolog с:
 
-# Install dependencies
-./build.sh deps
-```
+- Унификацией и поиском с возвратом (backtracking)
+- STM-based базой знаний (потокобезопасный доступ)
+- Веб-визуализатором для отладки запросов
 
-### Running the Application
+### Требования
 
-```bash
-# Development mode (hot-reload frontend + backend)
-./build.sh dev
+- Prolog-подобный синтаксис через макросы Clojure
+- Алгоритм унификации с occurs check
+- Ленивый поиск решений с backtracking
+- STM (refs, atoms, agents) для управления состоянием
+- Real-time веб-интерфейс с WebSocket
+- Трассировка вывода для визуализации
 
-# Or run production build
-./build.sh build
-./build.sh run
+---
 
-# Start on custom port
-./build.sh run 8080
-```
-
-Open http://localhost:3000 to access the web interface.
-
-## 📖 Usage
-
-### REPL-Driven Development
-
-```clojure
-;; Start a REPL
-./build.sh repl
-
-;; Load the core namespace
-(require '[logicflow.core :refer :all])
-(require '[logicflow.kb :as kb])
-(require '[logicflow.builtins :as b])
-
-;; Load example knowledge base
-(load-family-example!)
-
-;; Define facts
-(deffact parent :tom :mary)
-(deffact parent :mary :ann)
-
-;; Define rules (Prolog syntax!)
-(<- (grandparent ?x ?z)
-    (parent ?x ?y)
-    (parent ?y ?z))
-
-(<- (ancestor ?x ?y)
-    (parent ?x ?y))
-
-(<- (ancestor ?x ?z)
-    (parent ?x ?y)
-    (ancestor ?y ?z))
-
-;; Run queries
-(query (grandparent ?who :ann))
-;; => [{:who :tom}]
-
-(query (ancestor :tom ?descendant))
-;; => [{:descendant :mary} {:descendant :ann}]
-
-;; Interactive query (prints results)
-(?- (parent ?x ?y))
-
-;; Show knowledge base
-(show-kb)
-
-;; Start web server
-(require '[logicflow.web.server :as server])
-(server/start! :port 3000)
-```
-
-### DSL Syntax
-
-#### Facts
-
-```clojure
-;; Single fact
-(deffact parent :tom :mary)
-
-;; Multiple facts
-(facts
-  (parent :tom :mary)
-  (parent :tom :bob)
-  (parent :mary :ann))
-```
-
-#### Rules
-
-```clojure
-;; Arrow syntax (recommended - like Prolog!)
-(<- (grandparent ?x ?z)
-    (parent ?x ?y)
-    (parent ?y ?z))
-
-;; Named rule syntax
-(defrule ancestor [?x ?y]
-  (parent ?x ?y))
-
-;; Recursive rules
-(<- (ancestor ?x ?z)
-    (parent ?x ?y)
-    (ancestor ?y ?z))
-```
-
-#### Queries
-
-```clojure
-;; Find all solutions
-(query (parent ?x ?y))
-
-;; Find first solution
-(query-first (parent ?x ?y))
-
-;; Limit results
-(query-n 5 (ancestor :tom ?who))
-
-;; Multiple goals (conjunction)
-(query (parent ?x ?y) (parent ?y ?z))
-```
-
-### Built-in Predicates
-
-#### Arithmetic
-
-```clojure
-(require '[logicflow.builtins :as b])
-
-;; X is Expr (like Prolog)
-(b/is-goal ?sum '(+ 2 3))        ;; ?sum = 5
-(b/is-goal ?prod '(* 4 5))       ;; ?prod = 20
-
-;; Comparisons
-(b/gt ?x ?y)    ;; >
-(b/lt ?x ?y)    ;; <
-(b/gte ?x ?y)   ;; >=
-(b/lte ?x ?y)   ;; <=
-(b/eq ?x ?y)    ;; =:=
-(b/neq ?x ?y)   ;; =\=
-```
-
-#### Lists
-
-```clojure
-;; Membership
-(b/membero ?x [:a :b :c])
-
-;; Append
-(b/appendo [1 2] [3 4] ?result)  ;; ?result = [1 2 3 4]
-
-;; Length
-(b/lengtho [:a :b :c] ?n)        ;; ?n = 3
-
-;; Head/Tail
-(b/firsto [1 2 3] ?h)            ;; ?h = 1
-(b/resto [1 2 3] ?t)             ;; ?t = [2 3]
-(b/conso ?h ?t [1 2 3])          ;; ?h = 1, ?t = [2 3]
-
-;; Reverse
-(b/reverseo [1 2 3] ?r)          ;; ?r = [3 2 1]
-```
-
-#### Type Checking
-
-```clojure
-(b/numbero ?x)    ;; Is number?
-(b/atomo ?x)      ;; Is atom (keyword/symbol)?
-(b/listo ?x)      ;; Is list?
-(b/varo ?x)       ;; Is unbound variable?
-(b/nonvaro ?x)    ;; Is bound?
-(b/groundo ?x)    ;; Contains no variables?
-```
-
-## 🏗️ Architecture
+## Архитектура
 
 ```
-logicflow/
++---------------------------+
+|      DSL Macros           |  <- core.clj (deffact, defrule, query)
++---------------------------+
+            |
+            | AST (quoted forms)
+            v
++-----------------------+      +------------------------------+
+| Unification Engine    |<-----| Knowledge Base (STM)         |
+| (unify.clj)           |      | refs: facts, rules, history  |
++-----------------------+      +------------------------------+
+            |
+            | substitutions
+            v
++------------------------+
+| Backtracking Search    |  <- search.clj (lazy sequences)
++------------------------+
+            |
+            | solutions stream
+            v
++------------------------+      +------------------------------+
+| REST API / WebSocket   |<---->| Web Visualizer (Reagent)     |
+| (server.clj, api.clj)  |      | (ui.cljs)                    |
++------------------------+      +------------------------------+
+```
+
+### Алгоритм унификации
+
+```
+unify(t1, t2, subs):
+  t1' = walk(t1, subs)
+  t2' = walk(t2, subs)
+  
+  if t1' == t2':           return subs
+  if lvar?(t1'):           return extend(t1', t2', subs)
+  if lvar?(t2'):           return extend(t2', t1', subs)
+  if seq?(t1') && seq?(t2'):
+    return unify-seq(t1', t2', subs)
+  else:                    return FAIL
+```
+
+---
+
+## Структура проекта
+
+```
+LogicFlow/
+├── deps.edn                    # Зависимости Clojure
+├── shadow-cljs.edn             # Конфигурация ClojureScript
+├── package.json                # npm зависимости
+├── build.sh                    # Скрипт сборки
+├── README.md
 ├── src/logicflow/
-│   ├── core.clj           # DSL macros (deffact, defrule, query)
-│   ├── unify.clj          # Unification algorithm
-│   ├── search.clj         # Backtracking search engine
-│   ├── kb.clj             # STM knowledge base
-│   ├── builtins.clj       # Built-in predicates (arithmetic, lists)
-│   ├── trace.clj          # Inference tracing & debugging
-│   ├── tabling.clj        # Memoization for recursive predicates
-│   ├── persistence.clj    # Save/load KB to files
-│   ├── examples.clj       # Example knowledge bases
-│   ├── main.clj           # Application entry point
+│   ├── core.clj                # DSL макросы (deffact, defrule, query)
+│   ├── unify.clj               # Алгоритм унификации
+│   ├── search.clj              # Backtracking search
+│   ├── kb.clj                  # STM Knowledge Base
+│   ├── trace.clj               # Трассировка вывода
+│   ├── builtins.clj            # Встроенные предикаты
+│   ├── tabling.clj             # Мемоизация (tabling)
+│   ├── persistence.clj         # Сохранение/загрузка KB
+│   ├── examples.clj            # Примеры баз знаний
+│   ├── main.clj                # Entry point
 │   └── web/
-│       ├── server.clj     # HTTP server (HTTP-Kit)
-│       ├── api.clj        # REST API handlers
-│       ├── ws.clj         # WebSocket handlers
-│       └── ui.cljs        # Reagent/Re-frame frontend
-├── resources/public/
-│   ├── index.html
-│   └── css/style.css
+│       ├── server.clj          # HTTP-Kit сервер
+│       ├── api.clj             # REST API
+│       ├── ws.clj              # WebSocket handler
+│       └── ui.cljs             # ClojureScript UI (Reagent)
 ├── test/logicflow/
 │   ├── unify_test.clj
 │   ├── core_test.clj
 │   └── integration_test.clj
-├── build.sh               # Build script
-├── deps.edn
-└── shadow-cljs.edn
+├── resources/public/
+│   ├── index.html
+│   └── css/style.css
+└── .github/workflows/
+    └── ci.yml
 ```
 
-## 🔧 STM Features
+---
 
-LogicFlow uses Clojure's Software Transactional Memory for thread-safe knowledge base operations:
+## Реализация алгоритмов
+
+### Унификация (`unify.clj`)
+
+Унификация — сопоставление двух термов с нахождением подстановки переменных.
+
+Для термов $t_1$ и $t_2$ находим подстановку $\theta$ такую, что $t_1\theta = t_2\theta$.
 
 ```clojure
-;; All modifications are transactional
-(kb/assert-fact! :parent [:tom :mary])    ; Uses dosync + alter
-(kb/retract-fact! :parent [:tom :mary])   ; Atomic retraction
-
-;; Concurrent reads are always consistent
-(kb/get-all-facts)
-(kb/get-all-rules)
-
-;; Transaction history tracking
-(kb/get-history)
+(defn unify
+  [term1 term2 subs]
+  (let [t1 (walk term1 subs)
+        t2 (walk term2 subs)]
+    (cond
+      (= t1 t2) subs
+      (lvar? t1) (extend-subs t1 t2 subs)
+      (lvar? t2) (extend-subs t2 t1 subs)
+      (and (sequential? t1) (sequential? t2))
+      (unify-seq t1 t2 subs)
+      :else nil)))
 ```
 
-## 🌐 REST API
+**Особенности:**
+- Occurs check для предотвращения бесконечных структур
+- Поддержка вложенных структур (списки, мапы)
+- Walk для разрешения цепочек переменных
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/facts` | GET | Get all facts |
-| `/api/facts` | POST | Add a fact |
-| `/api/facts` | DELETE | Remove a fact |
-| `/api/rules` | GET | Get all rules |
-| `/api/rules` | POST | Add a rule |
-| `/api/query` | POST | Execute a query |
-| `/api/repl` | POST | Evaluate code (browser REPL) |
-| `/api/trace` | GET | Get inference trace |
-| `/api/history` | GET | Get transaction history |
-| `/api/stats` | GET | Get KB statistics |
-| `/api/clear` | POST | Clear knowledge base |
-| `/api/load-example` | POST | Load example KB |
-| `/api/export` | GET | Export KB |
-| `/api/import` | POST | Import KB |
-| `/api/save` | POST | Save KB to file |
-| `/api/export-prolog` | GET | Export in Prolog format |
+---
 
-## 🧪 Testing
+### Backtracking Search (`search.clj`)
+
+Поиск с возвратом реализован через ленивые последовательности:
+
+$$\text{solve}(G_1, G_2, ..., G_n) = \bigcup_{\theta \in G_1} \text{solve}(G_2\theta, ..., G_n\theta)$$
+
+```clojure
+(defn conj-goals
+  [goal1 goal2]
+  (fn [subs]
+    (mapcat goal2 (goal1 subs))))
+
+(defn disj-goals
+  [goal1 goal2]
+  (fn [subs]
+    (lazy-cat (goal1 subs) (goal2 subs))))
+
+(defn solve
+  ([goals] (solve goals empty-subs))
+  ([goals subs]
+   (if (empty? goals)
+     [subs]
+     (let [[g & gs] goals]
+       (mapcat #(solve gs %) (g subs))))))
+```
+
+**Особенности:**
+- Ленивые последовательности для эффективного перебора
+- Комбинаторы `conj-goals` (AND) и `disj-goals` (OR)
+- Поддержка cut и negation-as-failure
+
+---
+
+### STM Knowledge Base (`kb.clj`)
+
+База знаний использует Clojure STM для потокобезопасного доступа:
+
+```clojure
+(def facts  (ref {}))   ; {:predicate -> #{[args...]}}
+(def rules  (ref {}))   ; {:predicate -> [{:head :body}]}
+(def history (ref []))  ; transaction log
+
+(defn assert-fact!
+  [predicate args]
+  (dosync
+   (alter facts update predicate (fnil conj #{}) args)
+   (alter history conj {:type :assert
+                        :predicate predicate
+                        :args args
+                        :timestamp (System/currentTimeMillis)})))
+```
+
+**Особенности:**
+- `ref` + `dosync` для транзакционных изменений
+- `atom` для кэширования и статистики
+- `agent` для асинхронных уведомлений
+- Watchers для real-time обновлений UI
+
+---
+
+### DSL Макросы (`core.clj`)
+
+Макросы для Prolog-подобного синтаксиса:
+
+```clojure
+(defmacro deffact
+  [predicate & args]
+  `(kb/assert-fact! ~(keyword predicate) ~(vec args)))
+
+(defmacro defrule
+  [name head & body]
+  `(kb/add-rule! ~(keyword name) '~head '~(vec body)))
+
+(defmacro <-
+  [head & body]
+  `(kb/add-rule! ~(keyword (first head)) 
+                 '~(vec (rest head)) 
+                 '~(vec body)))
+
+(defmacro query
+  [& goals]
+  `(kb/query '~(vec goals)))
+```
+
+**Пример использования:**
+
+```clojure
+;; Факты
+(deffact parent :tom :mary)
+(deffact parent :mary :ann)
+
+;; Правило
+(<- (grandparent ?x ?z)
+    (parent ?x ?y)
+    (parent ?y ?z))
+
+;; Запрос
+(query (grandparent ?who :ann))
+;; => ({:who :tom})
+```
+
+---
+
+## Веб-интерфейс
+
+### REST API
+
+| Метод | Endpoint | Описание |
+|-------|----------|----------|
+| GET | `/api/facts` | Получить все факты |
+| POST | `/api/facts` | Добавить факт |
+| GET | `/api/rules` | Получить все правила |
+| POST | `/api/query` | Выполнить запрос |
+| GET | `/api/history` | История транзакций |
+| POST | `/api/load-example` | Загрузить пример |
+
+### WebSocket
+
+Real-time обновления через WebSocket `/ws`:
+
+```clojure
+{:type :fact-added, :predicate :parent, :args [:tom :mary]}
+{:type :query-executed, :goals [...], :result-count 3}
+{:type :kb-cleared}
+```
+
+---
+
+## Запуск
 
 ```bash
-# Run all tests
+# Установка зависимостей
+./build.sh deps
+
+# Запуск (frontend + backend)
+./build.sh start
+
+# Только backend
+./build.sh run
+
+# Только frontend
+./build.sh watch
+
+# Тесты
 ./build.sh test
-
-# Run specific test namespace
-./build.sh test --focus logicflow.unify-test
 ```
 
-## 📚 Examples
+Откройте http://localhost:3000 в браузере.
 
-### Family Relations
+---
+
+## Пример работы
 
 ```clojure
-(load-family-example!)
+;; Определение семейных отношений
+(deffact parent :tom :mary)
+(deffact parent :tom :bob)
+(deffact parent :mary :ann)
+(deffact male :tom)
+(deffact female :mary)
 
-;; Who are Tom's grandchildren?
-(query (grandparent :tom ?grandchild))
+;; Правила
+(<- (father ?x ?y) (parent ?x ?y) (male ?x))
+(<- (grandparent ?x ?z) (parent ?x ?y) (parent ?y ?z))
 
-;; Find all ancestor relationships
-(query (ancestor ?x ?y))
+;; Запросы
+(query (parent ?x ?y))
+;; => ({:x :tom, :y :mary} {:x :tom, :y :bob} {:x :mary, :y :ann})
 
-;; Who is the mother of Ann?
-(query (mother ?who :ann))
+(query (grandparent ?who :ann))
+;; => ({:who :tom})
+
+(query (father ?f ?c))
+;; => ({:f :tom, :c :mary} {:f :tom, :c :bob})
 ```
 
-### Animal Expert System
+---
 
-```clojure
-(require '[logicflow.examples :as ex])
-(ex/load-animal-expert!)
+## Выводы
 
-;; Assert observed characteristics
-(deffact has-hair :mystery)
-(deffact eats-meat :mystery)
-(deffact has-tawny-color :mystery)
-(deffact has-dark-spots :mystery)
+В данной лабораторной работе я:
 
-;; Identify the animal
-(query (is-a :mystery ?type))
-;; => [{:type :cheetah}]
-```
+- Реализовал DSL для логического программирования с унификацией и backtracking
+- Применил метапрограммирование через макросы Clojure для создания Prolog-подобного синтаксиса
+- Использовал STM (refs, atoms, agents) для потокобезопасной базы знаний
+- Создал веб-визуализатор с real-time обновлениями через WebSocket
+- Реализовал трассировку вывода для отладки запросов
 
-### Graph Pathfinding
+**Ключевые приёмы программирования:**
 
-```clojure
-(ex/load-graph-example!)
+| Приём | Где использован |
+|-------|-----------------|
+| Макросы | `deffact`, `defrule`, `<-`, `query` |
+| Ленивые последовательности | `solve`, `disj-goals`, rule resolution |
+| STM (refs) | Knowledge Base: `facts`, `rules`, `history` |
+| Рекурсия | `unify`, `walk`, `symbolize-term` |
+| Функции высшего порядка | `conj-goals`, `disj-goals`, `trace-goal` |
+| Pattern matching | Унификация термов |
+| ClojureScript + Reagent | Веб-интерфейс |
+| WebSocket | Real-time обновления |
 
-;; Find all paths from A to G
-(query (path :a :g ?path ?cost))
+**Реализованные возможности Prolog:**
 
-;; Check reachability
-(query (reachable :a :g))
-```
+- ✅ Факты и правила
+- ✅ Унификация с occurs check
+- ✅ Backtracking (поиск с возвратом)
+- ✅ Логические переменные
+- ✅ Составные термы
+- ✅ Negation as failure
+- ✅ Cut (отсечение)
+- ✅ Tabling (мемоизация)
+- ✅ Арифметика (`is/2`)
+- ✅ Сравнения (`>`, `<`, `>=`, `<=`)
+- ✅ Операции со списками (`member`, `append`, `length`)
 
-## 🎨 Web Interface
-
-The web interface provides:
-
-- **Dashboard** - Overview of facts, rules, and statistics
-- **Facts Browser** - View and manage facts by predicate
-- **Rules Browser** - View and manage inference rules
-- **Query Panel** - Interactive query execution with tracing
-- **REPL** - Full Prolog REPL in the browser
-- **Trace Viewer** - Visualize inference trees
-- **History Timeline** - Transaction history visualization
-
-## 🔮 Advanced Features
-
-### Tabling (Memoization)
-
-```clojure
-(require '[logicflow.tabling :as t])
-
-;; Enable tabling for recursive predicates
-(t/deftabled fib [n result]
-  (disj-all
-    (conj-all (== n 0) (== result 0))
-    (conj-all (== n 1) (== result 1))
-    (fresh [n1 n2 r1 r2]
-      (conj-all
-        (is n1 (- n 1))
-        (fib n1 r1)
-        (is n2 (- n 2))
-        (fib n2 r2)
-        (is result (+ r1 r2))))))
-```
-
-### Inference Tracing
-
-```clojure
-(require '[logicflow.trace :as trace])
-
-;; Enable tracing
-(trace/with-tracing
-  (query (ancestor :tom ?who)))
-
-;; Get trace data
-(trace/get-trace-log)
-(trace/print-trace)
-```
-
-### Persistence
-
-```clojure
-(require '[logicflow.persistence :as p])
-
-;; Save to EDN
-(p/save-kb! "my-kb.edn")
-
-;; Load from file
-(p/load-kb! "my-kb.edn")
-
-;; Export to Prolog format
-(spit "kb.pl" (p/export-prolog))
-
-;; Create backup
-(p/create-backup!)
-```
-
-## 📄 Build Commands
-
-```bash
-./build.sh help        # Show all commands
-./build.sh check       # Check dependencies
-./build.sh deps        # Install dependencies
-./build.sh clean       # Clean build artifacts
-./build.sh build       # Full production build
-./build.sh dev         # Development mode
-./build.sh run         # Run server
-./build.sh repl        # Start REPL
-./build.sh watch       # Frontend watch mode
-./build.sh test        # Run tests
-./build.sh release     # Create release archive
-```
-
-## 📄 License
-
-MIT License - see [LICENSE](LICENSE) for details.
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## 🙏 Acknowledgments
-
-- Inspired by [core.logic](https://github.com/clojure/core.logic)
-- Built with [Reagent](https://reagent-project.github.io/) and [Re-frame](https://day8.github.io/re-frame/)
-- Styled with modern CSS and [JetBrains Mono](https://www.jetbrains.com/lp/mono/)
+---

@@ -1,0 +1,34 @@
+{:linters
+ {:unused-binding {:level :warning}
+  :unused-import {:level :warning}
+  :unused-namespace {:level :warning}
+  :unused-private-var {:level :warning}
+  :unused-referred-var {:level :warning}
+  :unresolved-symbol {:level :error}
+  :unresolved-var {:level :warning}
+  :invalid-arity {:level :error}
+  :missing-docstring {:level :off}
+  :redundant-do {:level :warning}
+  :redundant-let {:level :warning}
+  :shadowed-var {:level :off}
+  :single-operand-comparison {:level :warning}
+  :type-mismatch {:level :error}}
+ 
+ :lint-as
+ {logicflow.core/deffact clojure.core/def
+  logicflow.core/defrule clojure.core/defn
+  logicflow.core/<- clojure.core/defn
+  logicflow.core/query clojure.core/identity
+  logicflow.search/fresh* clojure.core/let
+  logicflow.trace/with-tracing clojure.core/do
+  logicflow.tabling/tabled clojure.core/defn
+  reagent.core/with-let clojure.core/let}
+ 
+ :hooks {:analyze-call {}}
+ 
+ :output
+ {:progress true
+  :canonical-paths true}
+ 
+ :skip-comments true}
+

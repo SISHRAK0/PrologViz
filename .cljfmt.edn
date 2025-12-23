@@ -1,0 +1,27 @@
+{:paths ["src" "test" "dev"]
+ :indents {deffact [[:inner 0]]
+           defrule [[:inner 0]]
+           <- [[:inner 0]]
+           query [[:inner 0]]
+           fresh* [[:block 1]]
+           with-tracing [[:block 0]]
+           with-kb [[:block 0]]
+           with-temp-kb [[:block 0]]
+           tabled [[:inner 0]]
+           ;; Reagent / Re-frame
+           reg-event-db [[:inner 0]]
+           reg-event-fx [[:inner 0]]
+           reg-sub [[:inner 0]]
+           reg-fx [[:inner 0]]
+           reg-cofx [[:inner 0]]}
+ :remove-surrounding-whitespace? true
+ :remove-trailing-whitespace? true
+ :insert-missing-whitespace? true
+ :remove-consecutive-blank-lines? true
+ :remove-multiple-non-indenting-spaces? true
+ :split-keypaths-over-multiple-lines? false
+ :sort-ns-references? false
+ :function-arguments-indentation :community
+ :indentation? true
+ :align-associative? false}
+

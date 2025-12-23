@@ -118,14 +118,14 @@
 ;; Reification Tests
 ;; ============================================================================
 
-(deftest reify-test
+(deftest reify-term-test
   (testing "Reifying terms"
     (let [x (u/lvar "x")
           y (u/lvar "y")
           subs {x 42}]
-      (is (= 42 (u/reify x subs)))
-      (is (= '_0 (u/reify y subs)))
-      (is (= [42 '_0] (u/reify [x y] subs))))))
+      (is (= 42 (u/reify-term x subs)))
+      (is (= '_0 (u/reify-term y subs)))
+      (is (= [42 '_0] (u/reify-term [x y] subs))))))
 
 ;; ============================================================================
 ;; Symbolize Term Tests

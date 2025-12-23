@@ -117,7 +117,20 @@
   
   ;; Tabling
   (GET "/api/tabling" [] api/get-table-info)
-  (POST "/api/tabling/clear" [] api/clear-tables))
+  (POST "/api/tabling/clear" [] api/clear-tables)
+  
+  ;; Spy Points
+  (GET "/api/spy" [] api/get-spy-points)
+  (POST "/api/spy" [] api/add-spy-point)
+  (DELETE "/api/spy" [] api/remove-spy-point)
+  (POST "/api/spy/clear" [] api/clear-spy-points)
+  (GET "/api/spy/log" [] api/get-spy-log)
+  (POST "/api/spy/log/clear" [] api/clear-spy-log)
+  
+  ;; Puzzle Solvers
+  (POST "/api/solve/nqueens" [] api/solve-nqueens-api)
+  (POST "/api/solve/sudoku" [] api/solve-sudoku-api)
+  (GET "/api/solve/einstein" [] api/solve-einstein-api))
 
 (defroutes static-routes
   (GET "/" [] serve-index)

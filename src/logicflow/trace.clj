@@ -1,33 +1,17 @@
 (ns logicflow.trace
-  "Tracing and debugging for inference visualization.
-   Provides step-by-step execution tracking."
+  "Tracing and debugging for inference visualization."
   (:require [logicflow.unify :as u]))
-
-;; ============================================================================
-;; Trace State
-;; ============================================================================
 
 (def ^:dynamic *tracing* false)
 (def ^:dynamic *trace-depth* 0)
 (def ^:dynamic *max-trace-depth* 50)
+(def ^:dynamic *parent-node-id* nil)
 
-(def trace-log
-  "Atom containing trace events for visualization."
-  (atom []))
-
-(def trace-tree
-  "Atom containing inference tree structure."
-  (atom {:nodes [] :edges []}))
-
+(def trace-log (atom []))
+(def trace-tree (atom {:nodes [] :edges []}))
 (def node-counter (atom 0))
 
-;; ============================================================================
-;; Trace Events
-;; ============================================================================
-
-(defn clear-trace!
-  "Clear all trace data."
-  []
+(defn clear-trace! []
   (reset! trace-log [])
   (reset! trace-tree {:nodes [] :edges []})
   (reset! node-counter 0))
@@ -35,48 +19,44 @@
 (defn- next-node-id []
   (swap! node-counter inc))
 
-(defn log-event!
-  "Log a trace event."
-  [event]
+(defn log-event! [event]
   (when *tracing*
     (swap! trace-log conj
            (assoc event
                   :timestamp (System/currentTimeMillis)
                   :depth *trace-depth*))))
 
-(defn add-tree-node!
-  "Add a node to the inference tree."
-  [node]
+(defn add-tree-node! [node]
   (let [id (next-node-id)]
     (swap! trace-tree update :nodes conj (assoc node :id id))
     id))
 
-(defn add-tree-edge!
-  "Add an edge to the inference tree."
-  [from to label]
-  (swap! trace-tree update :edges conj {:from from :to to :label label}))
+(defn add-tree-edge! [from to label]
+  (when (and from to)
+    (swap! trace-tree update :edges conj {:from from :to to :label label})))
 
-;; ============================================================================
-;; Traced Goal Wrapper
-;; ============================================================================
-
-(defn trace-goal
-  "Wrap a goal with tracing for visualization."
-  [goal-name args goal]
+(defn trace-goal [goal-name args goal]
   (fn [subs]
     (if (or (not *tracing*) (> *trace-depth* *max-trace-depth*))
       (goal subs)
-      (let [node-id (add-tree-node! {:name goal-name
-                                      :args (u/walk* args subs)
+      (let [walked-args (u/walk* args subs)
+            node-id (add-tree-node! {:name goal-name
+                                      :args walked-args
                                       :type :call
-                                      :depth *trace-depth*})]
+                                      :depth *trace-depth*
+                                      :parent *parent-node-id*})]
+        ;; Add edge from parent to this node
+        (add-tree-edge! *parent-node-id* node-id nil)
+        
         (log-event! {:event :call
                      :goal goal-name
-                     :args (u/walk* args subs)
+                     :args walked-args
                      :subs (into {} (map (fn [[k v]] [(str k) (u/walk* v subs)]) subs))
-                     :node-id node-id})
+                     :node-id node-id
+                     :parent-id *parent-node-id*})
         
-        (binding [*trace-depth* (inc *trace-depth*)]
+        (binding [*trace-depth* (inc *trace-depth*)
+                  *parent-node-id* node-id]
           (let [results (goal subs)
                 result-seq (if (seq? results) results (seq results))]
             (if (seq result-seq)
@@ -105,32 +85,18 @@
                                nodes)))
                 []))))))))
 
-;; ============================================================================
-;; Tracing Macros
-;; ============================================================================
-
-(defmacro with-tracing
-  "Execute body with tracing enabled."
-  [& body]
+(defmacro with-tracing [& body]
   `(binding [*tracing* true
              *trace-depth* 0]
      (clear-trace!)
      (let [result# (do ~@body)]
        result#)))
 
-(defmacro trace
-  "Trace a single goal execution."
-  [goal-name args goal-expr]
+(defmacro trace [goal-name args goal-expr]
   `(trace-goal ~goal-name ~args ~goal-expr))
 
-;; ============================================================================
-;; Trace Formatting
-;; ============================================================================
-
-(defn format-trace
-  "Format trace log for display."
-  []
-  (for [{:keys [event goal args depth success result-count]} @trace-log]
+(defn format-trace []
+  (for [{:keys [event goal args depth result-count]} @trace-log]
     (let [indent (apply str (repeat depth "  "))
           args-str (pr-str args)]
       (case event
@@ -140,102 +106,73 @@
         :redo (str indent "REDO: " goal)
         (str indent (name event) ": " goal)))))
 
-(defn print-trace
-  "Print formatted trace to console."
-  []
+(defn print-trace []
   (doseq [line (format-trace)]
     (println line)))
 
-;; ============================================================================
-;; Inference Tree Export
-;; ============================================================================
+(defn get-trace-log [] @trace-log)
+(defn get-trace-tree [] @trace-tree)
 
-(defn get-trace-log
-  "Get the current trace log."
-  []
-  @trace-log)
+(defn format-term
+  "Format a term for display, converting LVars to ?name format."
+  [term]
+  (cond
+    (u/lvar? term) (str "?" (:name term))
+    (keyword? term) (str ":" (clojure.core/name term))
+    (sequential? term) (str "[" (clojure.string/join " " (map format-term term)) "]")
+    (map? term) (str "{" (clojure.string/join ", " (map (fn [[k v]] (str (format-term k) " " (format-term v))) term)) "}")
+    :else (pr-str term)))
 
-(defn get-trace-tree
-  "Get the inference tree for visualization."
-  []
-  @trace-tree)
-
-(defn export-trace-tree
-  "Export trace tree in format suitable for D3.js visualization."
-  []
+(defn export-trace-tree []
   (let [{:keys [nodes edges]} @trace-tree]
-    {:nodes (mapv (fn [{:keys [id name args type depth result-count]}]
+    {:nodes (mapv (fn [{:keys [id name args type depth result-count parent]}]
                     {:id id
-                     :label (str name)
-                     :args (pr-str args)
+                     :label (if (keyword? name) (clojure.core/name name) (str name))
+                     :args (format-term args)
                      :status (case type
                                :success "success"
                                :fail "fail"
                                :call "pending"
                                "unknown")
                      :depth depth
+                     :parent parent
                      :results (or result-count 0)})
                   nodes)
-     :links (mapv (fn [{:keys [from to label]}]
-                    {:source from
-                     :target to
-                     :label (or label "")})
-                  edges)}))
-
-;; ============================================================================
-;; Step-by-Step Execution
-;; ============================================================================
+     :links (vec (keep (fn [{:keys [from to label]}]
+                         (when (and from to)
+                           {:source from
+                            :target to
+                            :label (or label "")}))
+                       edges))}))
 
 (def step-state (atom {:paused false
                        :step-mode false
                        :current-step 0
                        :breakpoints #{}}))
 
-(defn set-breakpoint!
-  "Set a breakpoint on a predicate."
-  [predicate-name]
+(defn set-breakpoint! [predicate-name]
   (swap! step-state update :breakpoints conj predicate-name))
 
-(defn clear-breakpoint!
-  "Clear a breakpoint."
-  [predicate-name]
+(defn clear-breakpoint! [predicate-name]
   (swap! step-state update :breakpoints disj predicate-name))
 
-(defn clear-all-breakpoints!
-  "Clear all breakpoints."
-  []
+(defn clear-all-breakpoints! []
   (swap! step-state assoc :breakpoints #{}))
 
-(defn enable-step-mode!
-  "Enable step-by-step execution."
-  []
+(defn enable-step-mode! []
   (swap! step-state assoc :step-mode true :paused true))
 
-(defn disable-step-mode!
-  "Disable step-by-step execution."
-  []
+(defn disable-step-mode! []
   (swap! step-state assoc :step-mode false :paused false))
 
-(defn step!
-  "Execute one step."
-  []
+(defn step! []
   (swap! step-state update :current-step inc)
-  (swap! step-state assoc :paused false)
-  ;; Will pause again on next goal
-  )
+  (swap! step-state assoc :paused false))
 
-(defn continue!
-  "Continue execution until next breakpoint."
-  []
+(defn continue! []
   (swap! step-state assoc :paused false :step-mode false))
 
-;; ============================================================================
-;; Statistics
-;; ============================================================================
-
-(defn trace-stats
-  "Get statistics from trace log."
-  []
+(defn trace-stats []
   (let [log @trace-log
         calls (filter #(= :call (:event %)) log)
         successes (filter #(= :exit (:event %)) log)
@@ -250,3 +187,72 @@
                        (count successes))
                     0)}))
 
+;; Spy Points
+(def spy-points (atom #{}))
+(def spy-log (atom []))
+
+(defn spy! [predicate]
+  (swap! spy-points conj (if (keyword? predicate) predicate (keyword predicate)))
+  (println (str "Spy point set on: " predicate)))
+
+(defn nospy! [predicate]
+  (swap! spy-points disj (if (keyword? predicate) predicate (keyword predicate)))
+  (println (str "Spy point removed from: " predicate)))
+
+(defn nospy-all! []
+  (reset! spy-points #{})
+  (println "All spy points removed"))
+
+(defn spying? [predicate]
+  (let [pred-kw (if (keyword? predicate) predicate (keyword predicate))]
+    (contains? @spy-points pred-kw)))
+
+(defn get-spy-points [] @spy-points)
+
+(defn clear-spy-log! []
+  (reset! spy-log []))
+
+(defn get-spy-log [] @spy-log)
+
+(defn spy-goal [goal-name args goal]
+  (fn [subs]
+    (let [pred-kw (if (keyword? goal-name) goal-name (keyword goal-name))
+          is-spied (spying? pred-kw)
+          walked-args (u/walk* args subs)]
+      (when is-spied
+        (let [entry {:event :call
+                     :goal pred-kw
+                     :args walked-args
+                     :timestamp (System/currentTimeMillis)}]
+          (swap! spy-log conj entry)
+          (println (str "  CALL: " (name pred-kw) " " (pr-str walked-args)))))
+      
+      (let [results (goal subs)
+            result-seq (if (seq? results) results (seq results))]
+        (when is-spied
+          (if (seq result-seq)
+            (let [entry {:event :exit
+                         :goal pred-kw
+                         :args walked-args
+                         :result-count (count (take 100 result-seq))
+                         :timestamp (System/currentTimeMillis)}]
+              (swap! spy-log conj entry)
+              (println (str "  EXIT: " (name pred-kw) " (" (count (take 100 result-seq)) " solutions)")))
+            (let [entry {:event :fail
+                         :goal pred-kw
+                         :args walked-args
+                         :timestamp (System/currentTimeMillis)}]
+              (swap! spy-log conj entry)
+              (println (str "  FAIL: " (name pred-kw))))))
+        result-seq))))
+
+(defn spy-stats []
+  (let [log @spy-log
+        calls (filter #(= :call (:event %)) log)
+        exits (filter #(= :exit (:event %)) log)
+        fails (filter #(= :fail (:event %)) log)]
+    {:spy-points @spy-points
+     :total-calls (count calls)
+     :successes (count exits)
+     :failures (count fails)
+     :by-predicate (frequencies (map :goal calls))}))

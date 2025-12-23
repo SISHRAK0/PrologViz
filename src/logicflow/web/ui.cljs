@@ -69,7 +69,18 @@
    :view :dashboard
    :trace-enabled false
    :examples []
-   :inference-tree nil})
+   :inference-tree nil
+   ;; Spy points
+   :spy-points []
+   :spy-log []
+   :spy-stats {}
+   :spy-input ""
+   ;; Puzzles
+   :nqueens-n 8
+   :nqueens-solutions []
+   :sudoku-puzzle nil
+   :sudoku-solution nil
+   :einstein-solution nil})
 
 ;; ============================================================================
 ;; Events
@@ -334,6 +345,149 @@
  (fn [db _]
    (assoc db :error nil)))
 
+;; Spy Points Events
+(rf/reg-event-db
+ :set-spy-input
+ (fn [db [_ value]]
+   (assoc db :spy-input value)))
+
+(rf/reg-event-fx
+ :fetch-spy-points
+ (fn [{:keys [db]} _]
+   {:http-xhrio {:method :get
+                 :uri (str api-base "/api/spy")
+                 :response-format (ajax/json-response-format {:keywords? true})
+                 :on-success [:spy-points-loaded]
+                 :on-failure [:api-error]}}))
+
+(rf/reg-event-db
+ :spy-points-loaded
+ (fn [db [_ response]]
+   (assoc db 
+          :spy-points (get-in response [:data :spy-points])
+          :spy-log (get-in response [:data :spy-log])
+          :spy-stats (get-in response [:data :stats]))))
+
+(rf/reg-event-fx
+ :add-spy-point
+ (fn [{:keys [db]} _]
+   (let [pred (:spy-input db)]
+     (when (not (str/blank? pred))
+       {:db (assoc db :spy-input "")
+        :http-xhrio {:method :post
+                     :uri (str api-base "/api/spy")
+                     :params {:predicate pred}
+                     :format (ajax/json-request-format)
+                     :response-format (ajax/json-response-format {:keywords? true})
+                     :on-success [:spy-point-added]
+                     :on-failure [:api-error]}}))))
+
+(rf/reg-event-fx
+ :spy-point-added
+ (fn [{:keys [db]} _]
+   {:dispatch [:fetch-spy-points]}))
+
+(rf/reg-event-fx
+ :remove-spy-point
+ (fn [{:keys [db]} [_ pred]]
+   {:http-xhrio {:method :delete
+                 :uri (str api-base "/api/spy")
+                 :params {:predicate pred}
+                 :format (ajax/json-request-format)
+                 :response-format (ajax/json-response-format {:keywords? true})
+                 :on-success [:spy-point-removed]
+                 :on-failure [:api-error]}}))
+
+(rf/reg-event-fx
+ :spy-point-removed
+ (fn [{:keys [db]} _]
+   {:dispatch [:fetch-spy-points]}))
+
+(rf/reg-event-fx
+ :clear-spy-points
+ (fn [{:keys [db]} _]
+   {:http-xhrio {:method :post
+                 :uri (str api-base "/api/spy/clear")
+                 :format (ajax/json-request-format)
+                 :response-format (ajax/json-response-format {:keywords? true})
+                 :on-success [:spy-points-cleared]
+                 :on-failure [:api-error]}}))
+
+(rf/reg-event-fx
+ :spy-points-cleared
+ (fn [{:keys [db]} _]
+   {:dispatch [:fetch-spy-points]}))
+
+;; Puzzle Events
+(rf/reg-event-db
+ :set-nqueens-n
+ (fn [db [_ n]]
+   (assoc db :nqueens-n n)))
+
+(rf/reg-event-fx
+ :solve-nqueens
+ (fn [{:keys [db]} _]
+   {:db (assoc db :loading true :nqueens-solutions [])
+    :http-xhrio {:method :post
+                 :uri (str api-base "/api/solve/nqueens")
+                 :params {:n (:nqueens-n db)}
+                 :format (ajax/json-request-format)
+                 :response-format (ajax/json-response-format {:keywords? true})
+                 :on-success [:nqueens-solved]
+                 :on-failure [:api-error]}}))
+
+(rf/reg-event-db
+ :nqueens-solved
+ (fn [db [_ response]]
+   (assoc db 
+          :nqueens-solutions (get-in response [:data :solutions])
+          :loading false)))
+
+(rf/reg-event-fx
+ :solve-einstein
+ (fn [{:keys [db]} _]
+   {:db (assoc db :loading true :einstein-solution nil)
+    :http-xhrio {:method :get
+                 :uri (str api-base "/api/solve/einstein")
+                 :response-format (ajax/json-response-format {:keywords? true})
+                 :on-success [:einstein-solved]
+                 :on-failure [:api-error]}}))
+
+(rf/reg-event-db
+ :einstein-solved
+ (fn [db [_ response]]
+   (assoc db 
+          :einstein-solution (:data response)
+          :loading false)))
+
+(rf/reg-event-fx
+ :solve-sudoku
+ (fn [{:keys [db]} _]
+   {:db (assoc db :loading true :sudoku-solution nil)
+    :http-xhrio {:method :post
+                 :uri (str api-base "/api/solve/sudoku")
+                 :params {:puzzle [[5 3 0 0 7 0 0 0 0]
+                                   [6 0 0 1 9 5 0 0 0]
+                                   [0 9 8 0 0 0 0 6 0]
+                                   [8 0 0 0 6 0 0 0 3]
+                                   [4 0 0 8 0 3 0 0 1]
+                                   [7 0 0 0 2 0 0 0 6]
+                                   [0 6 0 0 0 0 2 8 0]
+                                   [0 0 0 4 1 9 0 0 5]
+                                   [0 0 0 0 8 0 0 7 9]]}
+                 :format (ajax/json-request-format)
+                 :response-format (ajax/json-response-format {:keywords? true})
+                 :on-success [:sudoku-solved]
+                 :on-failure [:api-error]}}))
+
+(rf/reg-event-db
+ :sudoku-solved
+ (fn [db [_ response]]
+   (assoc db 
+          :sudoku-puzzle (get-in response [:data :puzzle])
+          :sudoku-solution (get-in response [:data :solution])
+          :loading false)))
+
 ;; ============================================================================
 ;; Subscriptions
 ;; ============================================================================
@@ -355,6 +509,17 @@
 (rf/reg-sub :trace-enabled (fn [db] (:trace-enabled db)))
 (rf/reg-sub :examples (fn [db] (:examples db)))
 (rf/reg-sub :inference-tree (fn [db] (:inference-tree db)))
+;; Spy points
+(rf/reg-sub :spy-points (fn [db] (:spy-points db)))
+(rf/reg-sub :spy-log (fn [db] (:spy-log db)))
+(rf/reg-sub :spy-stats (fn [db] (:spy-stats db)))
+(rf/reg-sub :spy-input (fn [db] (:spy-input db)))
+;; Puzzles
+(rf/reg-sub :nqueens-n (fn [db] (:nqueens-n db)))
+(rf/reg-sub :nqueens-solutions (fn [db] (:nqueens-solutions db)))
+(rf/reg-sub :sudoku-puzzle (fn [db] (:sudoku-puzzle db)))
+(rf/reg-sub :sudoku-solution (fn [db] (:sudoku-solution db)))
+(rf/reg-sub :einstein-solution (fn [db] (:einstein-solution db)))
 
 (rf/reg-sub
  :predicate-list
@@ -403,6 +568,8 @@
     [nav-item :query "Query" "🔍"]
     [nav-item :repl "REPL" "💻"]
     [nav-item :trace "Trace" "🌳"]
+    [nav-item :spy "Spy" "🔎"]
+    [nav-item :puzzles "Puzzles" "🧩"]
     [nav-item :history "History" "📜"]]
    [:div.sidebar-footer
     [connection-status]]])
@@ -628,41 +795,117 @@
        "(show-kb)                         ; Show all facts & rules\n"
        "(clear!)                          ; Clear knowledge base"]]]))
 
+(defn build-tree-hierarchy [nodes]
+  "Build a hierarchical tree structure from flat nodes with parent references."
+  (let [nodes-by-id (into {} (map (juxt :id identity) nodes))
+        root-nodes (filter #(nil? (:parent %)) nodes)
+        children-map (group-by :parent nodes)]
+    (letfn [(build-node [node]
+              (let [children (get children-map (:id node) [])]
+                (assoc node :children (mapv build-node children))))]
+      (mapv build-node root-nodes))))
+
+(defn search-tree-node [node level]
+  (let [{:keys [id label args status results children]} node
+        has-children (seq children)
+        status-class (case status "success" "success" "fail" "fail" "pending")]
+    [:div.search-tree-node
+     [:div.node-content {:class status-class}
+      [:div.node-icon
+       (case status
+         "success" "✓"
+         "fail" "✗"
+         "⋯")]
+      [:div.node-info
+       [:span.node-label label]
+       [:span.node-args args]
+       (when (and (= status "success") (pos? results))
+         [:span.node-results (str results " solution" (when (> results 1) "s"))])]]
+     (when has-children
+       [:div.node-children
+        [:div.connector-line]
+        (for [child children]
+          ^{:key (:id child)}
+          [search-tree-node child (inc level)])])]))
+
+(defn search-tree-visualization [tree]
+  (let [nodes (:nodes tree)
+        hierarchy (build-tree-hierarchy nodes)]
+    [:div.search-tree
+     (if (empty? hierarchy)
+       [:div.empty-tree "Run a query with tracing enabled to see the search tree."]
+       [:div.tree-root
+        (for [root-node hierarchy]
+          ^{:key (:id root-node)}
+          [search-tree-node root-node 0])])]))
+
 (defn trace-view []
   (let [tree @(rf/subscribe [:inference-tree])
         trace @(rf/subscribe [:query-trace])]
     [:div.trace-view
-     [:h2 "Inference Trace"]
+     [:h2 "🌳 Search Tree"]
      
-     (if tree
+     [:div.trace-instructions
+      [:p "Enable " [:strong "tracing"] " in Query view, then execute a query to visualize the backtracking search tree."]]
+     
+     (if (and tree (seq (:nodes tree)))
        [:div.trace-content
-        [:div.trace-tree
-         [:h3 "Inference Tree"]
-         [:div.tree-visualization
-          (for [{:keys [id label args status depth results]} (:nodes tree)]
-            ^{:key id}
-            [:div.tree-node 
-             {:class status
-              :style {:margin-left (str (* depth 20) "px")}}
-             [:span.node-label label]
-             [:span.node-args (str " " args)]
-             (when (pos? results)
-               [:span.node-results (str " → " results " result(s)")])])]]
+        [:div.search-tree-panel
+         [:h3 "Backtracking Search Tree"]
+         [:div.tree-legend
+          [:span.legend-item.success "✓ Success"]
+          [:span.legend-item.fail "✗ Failure"]
+          [:span.legend-item.pending "⋯ Pending"]]
+         [search-tree-visualization tree]]
         
-        (when-let [log (get-in trace [:log])]
-          [:div.trace-log
+        [:div.trace-stats-panel
+         [:h3 "Statistics"]
+         (when-let [stats (get-in trace [:stats])]
+           [:div.stats-grid
+            [:div.stat-card
+             [:div.stat-number (:total-calls stats)]
+             [:div.stat-label "Total Calls"]]
+            [:div.stat-card
+             [:div.stat-number (:successes stats)]
+             [:div.stat-label "Successes"]]
+            [:div.stat-card
+             [:div.stat-number (:failures stats)]
+             [:div.stat-label "Failures"]]
+            [:div.stat-card
+             [:div.stat-number (:max-depth stats)]
+             [:div.stat-label "Max Depth"]]])]
+        
+        (when-let [log (:log trace)]
+          [:div.trace-log-panel
            [:h3 "Execution Log"]
-           [:div.log-entries
-            (for [[idx entry] (map-indexed vector (take 100 log))]
-              ^{:key idx}
-              [:div.log-entry {:class (name (:event entry))}
-               [:span.depth (apply str (repeat (:depth entry) "│ "))]
-               [:span.event (name (:event entry))]
-               [:span.goal " " (:goal entry)]
-               [:span.args " " (pr-str (:args entry))]])]])]
+           [:div.log-container
+            (for [[idx entry] (map-indexed vector (take 50 log))]
+              (let [event-type (keyword (:event entry))
+                    event-name (if (keyword? (:event entry)) 
+                                 (name (:event entry)) 
+                                 (str (:event entry)))]
+                ^{:key idx}
+                [:div.log-entry {:class event-name}
+                 [:span.log-indent (apply str (repeat (or (:depth entry) 0) "  "))]
+                 [:span.log-event {:class event-name}
+                  (case event-type
+                    :call "CALL"
+                    :exit "EXIT"
+                    :fail "FAIL"
+                    :redo "REDO"
+                    (str/upper-case event-name))]
+                 [:span.log-goal (if (keyword? (:goal entry)) 
+                                   (name (:goal entry)) 
+                                   (str (:goal entry)))]
+                 [:span.log-args (:args entry)]]))]])]
        [:div.no-trace
-        [:p "No trace data available."]
-        [:p "Enable tracing in the Query view and run a query to see the inference tree."]])]))
+        [:div.empty-state
+         [:div.empty-icon "🔍"]
+         [:h3 "No trace data"]
+         [:p "1. Go to the " [:strong "Query"] " view"]
+         [:p "2. Enable " [:strong "Tracing"] " checkbox"]
+         [:p "3. Execute a query like " [:code "(grandparent ?x :ann)"]]
+         [:p "4. Come back here to see the search tree"]]])]))
 
 (defn history-view []
   (let [history @(rf/subscribe [:history])]
@@ -690,6 +933,208 @@
               (when (:timestamp item)
                 (.toLocaleTimeString (js/Date. (:timestamp item))))]]])))]]))
 
+(defn spy-view []
+  (let [spy-points @(rf/subscribe [:spy-points])
+        spy-log @(rf/subscribe [:spy-log])
+        spy-stats @(rf/subscribe [:spy-stats])
+        spy-input @(rf/subscribe [:spy-input])
+        predicates @(rf/subscribe [:predicate-list])
+        loading @(rf/subscribe [:loading])]
+    [:div.spy-view
+     [:h2 "🔎 Spy Points"]
+     
+     [:div.spy-controls
+      [:div.spy-add
+       [:h3 "Add Spy Point"]
+       [:div.spy-input-group
+        [:input {:type "text"
+                 :placeholder "Enter predicate name (e.g., parent)"
+                 :value spy-input
+                 :on-change #(rf/dispatch [:set-spy-input (-> % .-target .-value)])
+                 :on-key-down #(when (= (.-key %) "Enter")
+                                 (rf/dispatch [:add-spy-point]))}]
+        [:button.btn.btn-primary
+         {:on-click #(rf/dispatch [:add-spy-point])
+          :disabled loading}
+         "Add Spy"]]
+       [:div.quick-spy
+        [:span "Quick add: "]
+        (for [pred (take 10 predicates)]
+          ^{:key pred}
+          [:button.btn.btn-small
+           {:on-click #(do (rf/dispatch [:set-spy-input (name pred)])
+                           (rf/dispatch [:add-spy-point]))}
+           (name pred)])]]
+      
+      [:div.spy-active
+       [:h3 "Active Spy Points"]
+       (if (empty? spy-points)
+         [:div.no-spy "No spy points set. Add one to start debugging."]
+         [:div.spy-list
+          (for [point spy-points]
+            ^{:key point}
+            [:div.spy-item
+             [:span.spy-name (if (keyword? point) (name point) (str point))]
+             [:button.btn.btn-small.btn-danger
+              {:on-click #(rf/dispatch [:remove-spy-point (if (keyword? point) (name point) (str point))])}
+              "×"]])
+          [:button.btn.btn-warning
+           {:on-click #(rf/dispatch [:clear-spy-points])}
+           "Clear All"]])]]
+     
+     [:div.spy-stats
+      [:h3 "Statistics"]
+      [:div.stats-grid
+       [:div.stat-item
+        [:span.stat-label "Total calls:"]
+        [:span.stat-value (or (:total-calls spy-stats) 0)]]
+       [:div.stat-item
+        [:span.stat-label "Successes:"]
+        [:span.stat-value.success (or (:successes spy-stats) 0)]]
+       [:div.stat-item
+        [:span.stat-label "Failures:"]
+        [:span.stat-value.failure (or (:failures spy-stats) 0)]]]]
+     
+     [:div.spy-log-section
+      [:h3 "Spy Log"]
+      [:button.btn.btn-small
+       {:on-click #(rf/dispatch [:fetch-spy-points])}
+       "Refresh"]
+      (if (empty? spy-log)
+        [:div.no-log "No spy events captured yet. Run a query with spy points active."]
+        [:div.spy-log
+         (for [[idx entry] (map-indexed vector (take 50 spy-log))]
+           ^{:key idx}
+           [:div.log-entry {:class (name (:event entry))}
+            [:span.event-type (name (:event entry))]
+            [:span.predicate (if (keyword? (:goal entry)) (name (:goal entry)) (str (:goal entry)))]
+            [:span.args (pr-str (:args entry))]])])]
+     
+     [:div.spy-help
+      [:h4 "How to use Spy Points"]
+      [:ol
+       [:li "Add a spy point for a predicate you want to debug"]
+       [:li "Go to the Query view and run a query that uses that predicate"]
+       [:li "Come back here to see the CALL/EXIT/FAIL events"]
+       [:li "Use this to understand how predicates are being resolved"]]]]))
+
+(defn queens-board [solution]
+  (let [n (count solution)]
+    [:div.queens-board
+     (for [row (range n)]
+       ^{:key row}
+       [:div.board-row
+        (for [col (range 1 (inc n))]
+          ^{:key col}
+          [:div.board-cell {:class (if (= col (nth solution row)) "queen" "")}
+           (when (= col (nth solution row)) "♛")])])]))
+
+(defn sudoku-grid [grid solved?]
+  (when (and grid (seq grid))
+    [:div.sudoku-grid {:class (when solved? "solved")}
+     (doall
+      (for [row (range 9)]
+        ^{:key row}
+        [:div.sudoku-row {:class (when (#{2 5} row) "border-bottom")}
+         (doall
+          (for [col (range 9)]
+            ^{:key col}
+            [:div.sudoku-cell {:class (str (when (#{2 5} col) "border-right ")
+                                           (when (zero? (get-in grid [row col] 0)) "empty"))}
+             (let [v (get-in grid [row col] 0)]
+               (when (pos? v) v))]))]))]))
+
+(defn puzzles-view []
+  (let [loading @(rf/subscribe [:loading])
+        nqueens-n @(rf/subscribe [:nqueens-n])
+        nqueens-solutions @(rf/subscribe [:nqueens-solutions])
+        einstein-solution @(rf/subscribe [:einstein-solution])
+        sudoku-puzzle @(rf/subscribe [:sudoku-puzzle])
+        sudoku-solution @(rf/subscribe [:sudoku-solution])]
+    [:div.puzzles-view
+     [:h2 "🧩 Classic Puzzles"]
+     
+     [:div.puzzle-section
+      [:h3 "♛ N-Queens Problem"]
+      [:p "Place N queens on an NxN chessboard so that no two queens attack each other."]
+      [:div.puzzle-controls
+       [:label "Board size (N): "]
+       [:input {:type "number"
+                :min 4
+                :max 12
+                :value nqueens-n
+                :on-change #(rf/dispatch [:set-nqueens-n (js/parseInt (-> % .-target .-value))])}]
+       [:button.btn.btn-primary
+        {:on-click #(rf/dispatch [:solve-nqueens])
+         :disabled loading}
+        (if loading "Solving..." "Solve N-Queens")]]
+      (when (seq nqueens-solutions)
+        [:div.nqueens-results
+         [:h4 (str "Found " (count nqueens-solutions) " solution(s)")]
+         [:div.solutions-grid
+          (for [[idx sol] (map-indexed vector (take 4 nqueens-solutions))]
+            ^{:key idx}
+            [:div.solution
+             [:div.solution-title (str "Solution " (inc idx))]
+             [queens-board sol]
+             [:div.solution-notation (pr-str sol)]])]])]
+     
+     [:div.puzzle-section
+      [:h3 "🏠 Einstein's Riddle"]
+      [:p "The famous logic puzzle: 5 houses, 5 nationalities, 5 colors, 5 drinks, 5 pets, 5 cigarettes. Who owns the fish?"]
+      [:button.btn.btn-primary
+       {:on-click #(rf/dispatch [:solve-einstein])
+        :disabled loading}
+       (if loading "Solving..." "Solve Einstein's Riddle")]
+      (when einstein-solution
+        [:div.einstein-results
+         [:h4.answer (:answer einstein-solution)]
+         [:table.einstein-table
+          [:thead
+           [:tr [:th "Position"] [:th "Nation"] [:th "Color"] [:th "Drink"] [:th "Pet"] [:th "Cigarette"]]]
+          [:tbody
+           (for [house (:solution einstein-solution)]
+             ^{:key (:position house)}
+             [:tr
+              [:td (:position house)]
+              [:td (name (:nation house))]
+              [:td (name (:color house))]
+              [:td (name (:drink house))]
+              [:td (name (:pet house))]
+              [:td (name (:cigarette house))]])]]])]
+     
+     [:div.puzzle-section
+      [:h3 "🔢 Sudoku"]
+      [:p "Solve a classic 9x9 Sudoku puzzle using backtracking."]
+      (let [default-puzzle [[5 3 0 0 7 0 0 0 0]
+                            [6 0 0 1 9 5 0 0 0]
+                            [0 9 8 0 0 0 0 6 0]
+                            [8 0 0 0 6 0 0 0 3]
+                            [4 0 0 8 0 3 0 0 1]
+                            [7 0 0 0 2 0 0 0 6]
+                            [0 6 0 0 0 0 2 8 0]
+                            [0 0 0 4 1 9 0 0 5]
+                            [0 0 0 0 8 0 0 7 9]]]
+        [:div
+         [:div.puzzle-controls
+          [:button.btn.btn-primary
+           {:on-click #(rf/dispatch [:solve-sudoku])
+            :disabled loading}
+           (if loading "Solving..." "Solve Sudoku")]]
+         (if sudoku-solution
+           [:div.sudoku-results
+            [:div.sudoku-comparison
+             [:div.sudoku-panel
+              [:h4 "Puzzle"]
+              [sudoku-grid (or sudoku-puzzle default-puzzle) false]]
+             [:div.sudoku-arrow "→"]
+             [:div.sudoku-panel
+              [:h4 "Solution"]
+              [sudoku-grid sudoku-solution true]]]]
+           [:div.sudoku-preview
+            [:h4 "Preview"]
+            [sudoku-grid default-puzzle false]])])]]))
+
 (defn main-content []
   (let [view @(rf/subscribe [:view])
         loading @(rf/subscribe [:loading])]
@@ -704,6 +1149,8 @@
        :query [query-view]
        :repl [repl-view]
        :trace [trace-view]
+       :spy [spy-view]
+       :puzzles [puzzles-view]
        :history [history-view]
        [dashboard-view])]))
 

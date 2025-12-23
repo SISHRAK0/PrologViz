@@ -1,85 +1,41 @@
 (ns logicflow.search
-  "Backtracking search engine for logic programming.
-   Implements goal-based search with lazy evaluation."
+  "Backtracking search engine with lazy evaluation."
   (:require [logicflow.unify :as u]))
 
-;; ============================================================================
-;; Goal Combinators
-;; ============================================================================
+(defn succeed [subs] [subs])
+(defn fail [_subs] [])
+(def fail-goal (constantly []))
+(def succeed-goal (fn [subs] [subs]))
 
-(defn succeed
-  "A goal that always succeeds with the given substitution."
-  [subs]
-  [subs])
-
-(defn fail
-  "A goal that always fails."
-  [_subs]
-  [])
-
-(def fail-goal
-  "A goal function that always fails."
-  (constantly []))
-
-(def succeed-goal
-  "A goal function that always succeeds."
-  (fn [subs] [subs]))
-
-(defn conj-goals
-  "Conjunction: both goals must succeed (AND).
-   Returns a lazy sequence of substitutions."
-  [goal1 goal2]
+(defn conj-goals [goal1 goal2]
   (fn [subs]
     (mapcat goal2 (goal1 subs))))
 
-(defn disj-goals
-  "Disjunction: either goal can succeed (OR).
-   Returns a lazy sequence combining both branches."
-  [goal1 goal2]
+(defn disj-goals [goal1 goal2]
   (fn [subs]
     (lazy-cat (goal1 subs) (goal2 subs))))
 
-(defn conj-all
-  "Conjunction of multiple goals."
-  [& goals]
+(defn conj-all [& goals]
   (if (empty? goals)
     succeed-goal
     (reduce conj-goals goals)))
 
-(defn disj-all
-  "Disjunction of multiple goals."
-  [& goals]
+(defn disj-all [& goals]
   (if (empty? goals)
     fail-goal
     (reduce disj-goals goals)))
 
-;; ============================================================================
-;; Fresh Variables
-;; ============================================================================
-
-(defn fresh
-  "Create fresh logic variables and apply them to a goal function.
-   The goal-fn should accept n arguments (the fresh variables)."
-  [n goal-fn]
+(defn fresh [n goal-fn]
   (fn [subs]
     (let [vars (repeatedly n #(u/lvar (gensym "v")))]
       ((apply goal-fn vars) subs))))
 
-(defmacro fresh*
-  "Macro for fresh variables with names.
-   Usage: (fresh* [x y z] (== x 1) (== y 2))"
-  [vars & goals]
+(defmacro fresh* [vars & goals]
   `(fresh ~(count vars)
      (fn [~@vars]
        (conj-all ~@goals))))
 
-;; ============================================================================
-;; Conditional Goals
-;; ============================================================================
-
-(defn conda
-  "Soft cut: if first goal succeeds, commit to that branch."
-  [& clauses]
+(defn conda [& clauses]
   (fn [subs]
     (loop [cs clauses]
       (if (empty? cs)
@@ -90,9 +46,7 @@
             (mapcat (apply conj-all goals) results)
             (recur (rest cs))))))))
 
-(defn condu
-  "Committed choice: like conda but takes only first result."
-  [& clauses]
+(defn condu [& clauses]
   (fn [subs]
     (loop [cs clauses]
       (if (empty? cs)
@@ -103,37 +57,22 @@
             (take 1 (mapcat (apply conj-all goals) results))
             (recur (rest cs))))))))
 
-;; ============================================================================
-;; Negation
-;; ============================================================================
-
-(defn noto
-  "Negation as failure: succeed if goal fails, fail if goal succeeds."
-  [goal]
+(defn noto [goal]
   (fn [subs]
     (if (seq (goal subs))
       []
       [subs])))
 
-;; ============================================================================
-;; Cut
-;; ============================================================================
-
 (def ^:dynamic *cut-exception* nil)
-
 (defrecord CutSignal [])
 
-(defn cut
-  "Cut: prune the search tree."
-  []
+(defn cut []
   (fn [subs]
     (if *cut-exception*
       (throw (ex-info "cut" {:signal (CutSignal.) :subs subs}))
       [subs])))
 
-(defn catch-cut
-  "Catch cut exceptions within a scope."
-  [goal]
+(defn catch-cut [goal]
   (fn [subs]
     (binding [*cut-exception* true]
       (try
@@ -143,13 +82,7 @@
             [(-> e ex-data :subs)]
             (throw e)))))))
 
-;; ============================================================================
-;; Search Strategies
-;; ============================================================================
-
 (defn solve
-  "Solve a sequence of goals with the given substitution.
-   Returns a lazy sequence of successful substitutions."
   ([goals] (solve goals u/empty-subs))
   ([goals subs]
    (if (empty? goals)
@@ -157,25 +90,15 @@
      (let [[g & gs] goals]
        (mapcat #(solve gs %) (g subs))))))
 
-(defn solve-n
-  "Solve for at most n solutions."
-  [n goals subs]
+(defn solve-n [n goals subs]
   (take n (solve goals subs)))
 
-(defn solve-first
-  "Solve for the first solution only."
-  [goals subs]
+(defn solve-first [goals subs]
   (first (solve goals subs)))
-
-;; ============================================================================
-;; Goal with Tracing (for visualization)
-;; ============================================================================
 
 (def ^:dynamic *trace-fn* nil)
 
-(defn trace-goal
-  "Wrap a goal with tracing for visualization."
-  [name goal]
+(defn trace-goal [name goal]
   (fn [subs]
     (when *trace-fn*
       (*trace-fn* {:event :enter-goal :name name :subs subs}))
@@ -184,39 +107,21 @@
         (*trace-fn* {:event :exit-goal :name name :results (count (take 100 results))}))
       results)))
 
-(defmacro with-trace
-  "Execute goals with tracing enabled."
-  [trace-fn & body]
+(defmacro with-trace [trace-fn & body]
   `(binding [*trace-fn* ~trace-fn]
      ~@body))
 
-;; ============================================================================
-;; Utilities
-;; ============================================================================
-
-(defn run*
-  "Run a goal and return all solutions, reifying the result variable."
-  [goal result-var]
+(defn run* [goal result-var]
   (for [subs (goal u/empty-subs)]
     (u/reify-term result-var subs)))
 
-(defn run-n
-  "Run a goal and return at most n solutions."
-  [n goal result-var]
+(defn run-n [n goal result-var]
   (take n (run* goal result-var)))
 
-(defn run-1
-  "Run a goal and return the first solution."
-  [goal result-var]
+(defn run-1 [goal result-var]
   (first (run* goal result-var)))
 
-;; ============================================================================
-;; Relational Arithmetic (for demo)
-;; ============================================================================
-
-(defn membero
-  "Relational membership: x is a member of list l."
-  [x l]
+(defn membero [x l]
   (fn [subs]
     (let [l' (u/walk l subs)]
       (cond
@@ -228,9 +133,7 @@
          subs)
         :else []))))
 
-(defn appendo
-  "Relational append: l3 is the concatenation of l1 and l2."
-  [l1 l2 l3]
+(defn appendo [l1 l2 l3]
   (disj-goals
    (conj-goals (u/== l1 []) (u/== l2 l3))
    (fresh 3
@@ -240,9 +143,7 @@
         (u/== l3 (cons head res))
         (appendo tail l2 res))))))
 
-(defn lengtho
-  "Relational length: n is the length of list l."
-  [l n]
+(defn lengtho [l n]
   (disj-goals
    (conj-goals (u/== l []) (u/== n 0))
    (fresh 2
@@ -256,7 +157,6 @@
                 (u/== true (> n' 0))
                 (lengtho tail (dec n')))
                subs)
-              ;; Generate mode
               (let [new-n (u/lvar "n")]
                 ((conj-all
                   (lengtho tail new-n)
@@ -266,4 +166,3 @@
                         ((u/== n (inc tail-len)) s)
                         []))))
                  subs))))))))))
-
