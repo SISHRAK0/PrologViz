@@ -14,7 +14,7 @@
                 :output-dir "resources/public/js"
                 :asset-path "/js"
                 
-                :modules {:main {:init-fn logicflow.web.ui/init!}}
+                :modules {:main {:init-fn logicflow.front.core/init!}}
                 
                 :devtools {:http-root "resources/public"
                            :http-port 8080
